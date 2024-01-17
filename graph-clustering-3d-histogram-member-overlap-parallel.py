@@ -23,8 +23,9 @@ pairs_to_compare = set()
 for member in members.keys():
     for i in range(0, len(members[member])):
         for j in range(i, len(members[member])):
-            if not ((members[member][i], members[member][j]) in pairs_to_compare or (members[member][j], members[member][i]) in pairs_to_compare):
-                pairs_to_compare.add((members[member][i], members[member][j]))
+            if not (members[member][i] == members[member][j]):
+                if not ((members[member][i], members[member][j]) in pairs_to_compare or (members[member][j], members[member][i]) in pairs_to_compare):
+                    pairs_to_compare.add((members[member][i], members[member][j]))
 
 print(len(pairs_to_compare))
 

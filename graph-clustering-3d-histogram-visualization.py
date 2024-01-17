@@ -1,18 +1,13 @@
-import datetime
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import os
 import sys
 from datetime import datetime
+import plotly.graph_objects as go
 
-# Set the QT_QPA_PLATFORM environment variable
-os.environ['QT_QPA_PLATFORM'] = 'wayland'
 
-# Import your Qt-based modules after setting the environment variable
-from PyQt5.QtCore import QThread, QObject, pyqtSignal
 
 def read_triples_from_file_numpy(file_path):
     with open(file_path, 'r') as file:
@@ -44,75 +39,196 @@ def read_triples_from_file_numpy(file_path):
     return triples
 
 
+def create_bar_mesh(x, y, z, dx, dy, dz):
+    def cube_vertices(x, y, z, dx, dy, dz):
+        return np.array([
+            [x, y, z], [x+dx, y, z], [x+dx, y+dy, z], [x, y+dy, z],
+            [x, y, z+dz], [x+dx, y, z+dz], [x+dx, y+dy, z+dz], [x, y+dy, z+dz]
+        ])
 
-if __name__ == '__main__':
+    vertices = []
+    for xi, yi, zi, dxi, dyi, dzi in zip(x, y, z, dx, dy, dz):
+        vertices.append(cube_vertices(xi, yi, zi, dxi, dyi, dzi))
+
+    # Each bar consists of 12 triangles (2 per face)
+    faces = []
+    for i in range(len(x)):
+        offset = i * 8  # Each cube has 8 vertices
+        faces.extend([
+            [offset, offset+1, offset+2], [offset, offset+2, offset+3],  # Front face
+            [offset+4, offset+7, offset+6], [offset+4, offset+6, offset+5],  # Back face
+            [offset, offset+3, offset+7], [offset, offset+7, offset+4],  # Left face
+            [offset+1, offset+5, offset+6], [offset+1, offset+6, offset+2],  # Right face
+            [offset, offset+4, offset+5], [offset, offset+5, offset+1],  # Bottom face
+            [offset+3, offset+2, offset+6], [offset+3, offset+6, offset+7]  # Top face
+        ])
+
+    # Flatten the vertices array
+    vertices = np.array(vertices).reshape(-1, 3).T
+
+    return vertices, faces
+
+
+file_compared_pairs = sys.argv[1]
+file_communities = sys.argv[2]
+
+current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+print(current_time + ": Started computation")
+
+with open(file_communities, 'r') as fp:
+    file = fp.readlines()
+
+# create 4-tupel for every community
+# ( community id | number of members | size of overlap | members of community as set )
+communities = {k: [k, len(file[k].replace('\n', '').split(' ')), 0, set(file[k].replace('\n', '').split(' '))] for k in range(0, len(file))}
+
+# first read all triples to get max_overlap
+triples = read_triples_from_file_numpy(file_compared_pairs)
+
+max_overlap = np.max(triples[:, 2])
+
+current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+print(current_time + ": Found max overlap: " + str(max_overlap))
+
+# determine the max value of the community size
+max_community_size = 0
+for community_id, community_info in communities.items():
+    max_community_size = max(max_community_size, community_info[1])
+
+current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+print(current_time + ": Found max community size: " + str(max_community_size))
+
+# Initialize a 3D array for counts
+counts = np.zeros((max_community_size + 1, max_overlap + 1), dtype=np.int32)
+
+# Process triples and update counts immediately
+i = 0
+unique_overlaps = set()
+print("length of triples: " + str(len(triples)))
+for triple in triples:
+    community1_size = communities[triple[0]][1]
+    community2_size = communities[triple[1]][1]
+    overlap_size = triple[2]
+    counts[community1_size, overlap_size] += 1
+    counts[community2_size, overlap_size] += 1
+
+    # get unique overlap sizes
+    unique_overlaps.add(overlap_size)
+
+print("unique overlaps: " + str(unique_overlaps))
+
+# print("total sum of counts: " + str(np.sum(counts)))
+
+current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+print(current_time + ": Prepared data for 3d plot")
+
+triples = None
+communities = None
+
+# Create the 3D plot with Plotly
+fig = go.Figure()
+
+if True:
+    # Define the range for the subset
+    x_range = 250  # Adjust as needed
+    y_range = 500  # Adjust as needed
+
+    # Create the x, y coordinates for the subset
+    xpos_subset, ypos_subset = np.meshgrid(np.arange(x_range), np.arange(y_range))
+    xpos_subset = xpos_subset.flatten()
+    ypos_subset = ypos_subset.flatten()
+
+    # Select the counts for the subset and then flatten
+    counts_subset = counts[:y_range, :x_range].flatten()
+
+    # Filter out zero values from the subset
+    non_zero_indices_subset = counts_subset != 0
+    xpos_filtered = xpos_subset[non_zero_indices_subset]
+    ypos_filtered = ypos_subset[non_zero_indices_subset]
+    dz_filtered = counts_subset[non_zero_indices_subset]
+
+    vertices, faces = create_bar_mesh(xpos_filtered, ypos_filtered, np.zeros_like(dz_filtered),
+                                      np.ones_like(xpos_filtered), np.ones_like(ypos_filtered), dz_filtered)
+
+    # Generate colors for each face
+    colors = ['blue'] * len(faces)
+
+    fig.add_trace(go.Mesh3d(
+        x=vertices[0], # X-coordinates of vertices
+        y=vertices[1], # Y-coordinates of vertices
+        z=vertices[2], # Z-coordinates of vertices
+        i=[f[0] for f in faces],
+        j=[f[1] for f in faces],
+        k=[f[2] for f in faces],
+        opacity=1,
+        facecolor=colors#,  # Array of colors for each face
+        #hoverinfo='none'
+    ))
+
+    # Add invisible Scatter3d trace for hover info
+    hover_text = [f"Overlap Size: {x}, Community Size: {y}, Count: {z}" for x, y, z in zip(xpos_filtered, ypos_filtered, dz_filtered)]
+    fig.add_trace(go.Scatter3d(
+        x=xpos_filtered,
+        y=ypos_filtered,
+        z=dz_filtered,
+        mode='markers',
+        marker=dict(size=5, opacity=0),
+        text=hover_text,
+        hoverinfo='text'
+    ))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Size of Overlap',
+            yaxis_title='Size of Community',
+            zaxis=dict(
+                title='Number of Overlaps',
+                type='log',
+                range=[np.log10(1), np.log10(np.max(dz_filtered) + 1)] # Adjust the log range
+            )
+        ),
+        title='3D Bar Chart of Community Overlaps'
+    )
+
+    # Save the plot to a file with the current date and time
     current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    print(current_time + ": Started computation")
+    file_name = f"3d_plot_{current_time}.html"
+    fig.write_html(file_name)
 
-    # Example usage
-    file_compared_pairs = "graph-clustering-3d-histogram-member-overlap-parallel.sh.o274603"
+    print(current_time + ": Created 3d bar diagram with Plotly")
 
-    with open(r'ig_communities_output_120h.metis', 'r') as fp:
-        file = fp.readlines()
-
-    # create 4-tupel for every community
-    # ( community id | number of members | size of overlap | members of community as set )
-    communities = {k: [k, len(file[k].replace('\n', '').split(' ')), 0, set(file[k].replace('\n', '').split(' '))] for k in range(0, len(file))}
-
-    # first read all triples to get max_overlap
-    triples = read_triples_from_file_numpy(file_compared_pairs)
-    max_overlap = np.max(triples[:, 2])
-    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    print(current_time + ": Found max overlap: " + str(max_overlap))
-    triples = None
-
-    # determine the max value of the community size
-    max_community_size = 0
-    for community_id, community_info in communities.items():
-        max_community_size = max(max_community_size, community_info[1])
-        # Find max overlap size from triples
-        # This requires processing the triples file line by line
-        # Placeholder for processing triples file to find max_overlap
-
-    # Initialize a 3D array for counts
-    counts = np.zeros((max_community_size + 1, max_overlap + 1), dtype=np.int32)
-
-    # Process triples and update counts immediately
-    with open(file_compared_pairs, 'r') as file:
-        for line in file:
-            parts = line.strip().split(',')
-            if len(parts) == 3:
-                try:
-                    triple = np.array(parts, dtype=int)
-                    community1_size = communities[triple[0]][1]
-                    community2_size = communities[triple[1]][1]
-                    overlap_size = triple[2]
-                    counts[community1_size, overlap_size] += 1
-                    counts[community2_size, overlap_size] += 1
-                except ValueError:
-                    continue
-
-    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    print(current_time + ": Prepared data for 3d plot")
-
+if False: # matplotlib
     # Create the 3D plot
-    fig = plt.figure()
+    fig = plt.figure(figsize=(15,15))
     ax = fig.add_subplot(111, projection='3d')
 
-    # Create the x, y, and z coordinates
-    xpos, ypos = np.meshgrid(np.arange(counts.shape[1]), np.arange(counts.shape[0]))
-    xpos = xpos.flatten()
-    ypos = ypos.flatten()
-    zpos = np.zeros_like(xpos)
+    # Define the range for the subset
+    x_range = 250  # Adjust as needed
+    y_range = 500  # Adjust as needed
 
-    # Create the dx, dy, dz for bar sizes
-    dx = dy = np.ones_like(zpos)
-    dz = counts.flatten()
+    # Create the x, y coordinates for the subset
+    xpos_subset, ypos_subset = np.meshgrid(np.arange(x_range), np.arange(y_range))
+    xpos_subset = xpos_subset.flatten()
+    ypos_subset = ypos_subset.flatten()
+    zpos_subset = np.zeros_like(xpos_subset)
 
-    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    print(current_time + ": Created axis for 3d plot")
+    # Select the counts for the subset and then flatten
+    counts_subset = counts[:y_range, :x_range].flatten()
 
-    ax.bar3d(xpos, ypos, zpos, dx, dy, dz)
+    # Filter out zero values from the subset
+    non_zero_indices_subset = counts_subset != 0
+    xpos_filtered = xpos_subset[non_zero_indices_subset]
+    ypos_filtered = ypos_subset[non_zero_indices_subset]
+    zpos_filtered = zpos_subset[non_zero_indices_subset]
+
+    # Create the dx, dy, dz for bar sizes for the filtered subset
+    dx_filtered = dy_filtered = np.ones_like(zpos_filtered)
+    dz_filtered = counts_subset[non_zero_indices_subset]
+
+    ax.set_zscale('log')
+    ax.set_zlim(1, max(dz_filtered))
+
+    ax.bar3d(xpos_filtered, ypos_filtered, zpos_filtered, dx_filtered, dy_filtered, dz_filtered)
 
     current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     print(current_time + ": Created 3d bar diagram")
