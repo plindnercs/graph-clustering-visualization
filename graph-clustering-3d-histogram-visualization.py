@@ -1,3 +1,5 @@
+# usage: python3 graph-clustering-3d-histogram-visualization.py graph-clustering-3d-histogram-member-overlap-parallel.sh.o276078 ig_communities_output_120h.metis
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -130,8 +132,8 @@ fig = go.Figure()
 
 if True:
     # Define the range for the subset
-    x_range = 250  # Adjust as needed
-    y_range = 500  # Adjust as needed
+    x_range = max_overlap  # Adjust as needed
+    y_range = max_community_size  # Adjust as needed
 
     # Create the x, y coordinates for the subset
     xpos_subset, ypos_subset = np.meshgrid(np.arange(x_range), np.arange(y_range))
@@ -177,6 +179,14 @@ if True:
         hoverinfo='text'
     ))
 
+    # Save the triples to a file (for generating a model based on the data)
+    triples_file_name = f"triples_{current_time}.txt"
+    with open(triples_file_name, 'w') as file:
+        for x, y, z in zip(xpos_filtered, ypos_filtered, dz_filtered):
+            file.write(f"{x}, {y}, {z}\n")
+
+    print(current_time + ": Saved triples to " + triples_file_name)
+
     fig.update_layout(
         scene=dict(
             xaxis_title='Size of Overlap',
@@ -184,7 +194,8 @@ if True:
             zaxis=dict(
                 title='Number of Overlaps',
                 type='log',
-                range=[np.log10(1), np.log10(np.max(dz_filtered) + 1)] # Adjust the log range
+                range=[np.log10(100), np.log10(np.max(dz_filtered) + 1)] # Adjust the log range
+                # range=[np.log10(1), np.log10(np.max(dz_filtered) + 1)] # shows all values on z-axis
             )
         ),
         title='3D Bar Chart of Community Overlaps'
@@ -203,7 +214,7 @@ if False: # matplotlib
     ax = fig.add_subplot(111, projection='3d')
 
     # Define the range for the subset
-    x_range = 250  # Adjust as needed
+    x_range = 100  # Adjust as needed
     y_range = 500  # Adjust as needed
 
     # Create the x, y coordinates for the subset
