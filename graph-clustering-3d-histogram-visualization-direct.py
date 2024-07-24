@@ -1,31 +1,19 @@
-# visualization of overlaps based on triples: community1_id, community2_id, overlap_size
-# usage: python3 graph-clustering-3d-histogram-visualization.py graph-clustering-3d-histogram-member-overlap-parallel.sh.o276078 ig_communities_output_120h.metis onMach2 (true | false)
+# visualization of overlap function based on triples: overlap_size, community_size, value (obtained by random_matching; output_*.txt or by "usual" visualization file: triples_*.txt)
+# usage: python3 graph-clustering-3d-histogram-visualization-direct.py output_20240410_060918.txt
 
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import sys
 from datetime import datetime
 import plotly.graph_objects as go
 
 
 
-def read_triples_from_file_numpy(file_path, on_mach2):
+def read_triples_from_file_numpy(file_path, num_lines):
     with open(file_path, 'r') as file:
-        # iterate until the "*****" line is found (needed for output on mach2)
-
-        if on_mach2 == 'true':
-            sawStarsOnce = False
-            for line in file:
-                if line.strip() == "*****":
-                    if sawStarsOnce:
-                        break
-                    sawStarsOnce = True
-
         # The next line contains the number of triples
-        num_triples = int(next(file).strip())
+        num_triples = num_lines
 
         # Preallocate a NumPy array of the right size
         triples = np.empty((num_triples, 3), dtype=int)
@@ -74,32 +62,25 @@ def create_bar_mesh(x, y, z, dx, dy, dz):
     return vertices, faces
 
 
-file_compared_pairs = sys.argv[1]
-file_communities = sys.argv[2]
-on_mach2 = sys.argv[3]
+file_overlap_triples = sys.argv[1]
 
 current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 print(current_time + ": Started computation")
 
-with open(file_communities, 'r') as fp:
-    file = fp.readlines()
-
-# create 4-tupel for every community
-# ( community id | number of members | size of overlap | members of community as set )
-communities = {k: [k, len(file[k].replace('\n', '').split(' ')), 0, set(file[k].replace('\n', '').split(' '))] for k in range(0, len(file))}
+num_lines = 0
+with open(file_overlap_triples, "rb") as f:
+    num_lines = sum(1 for _ in f)
 
 # first read all triples to get max_overlap
-triples = read_triples_from_file_numpy(file_compared_pairs, on_mach2)
+triples = read_triples_from_file_numpy(file_overlap_triples, num_lines)
 
-max_overlap = np.max(triples[:, 2])
+max_overlap = np.max(triples[:, 0])
 
 current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 print(current_time + ": Found max overlap: " + str(max_overlap))
 
 # determine the max value of the community size
-max_community_size = 0
-for community_id, community_info in communities.items():
-    max_community_size = max(max_community_size, community_info[1])
+max_community_size = np.max(triples[:, 1])
 
 current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 print(current_time + ": Found max community size: " + str(max_community_size))
@@ -109,49 +90,39 @@ counts = np.zeros((max_community_size + 1, max_overlap + 1), dtype=np.int32)
 
 # Process triples and update counts immediately
 i = 0
+unique_overlaps = set()
 print("length of triples: " + str(len(triples)))
 for triple in triples:
-    community1_size = communities[triple[0]][1]
-    community2_size = communities[triple[1]][1]
-    overlap_size = triple[2]
-    counts[community1_size, overlap_size] += 1
-    counts[community2_size, overlap_size] += 1
-
-# print("total sum of counts: " + str(np.sum(counts)))
+    community_size = triple[1]
+    overlap_size = triple[0]
+    counts[community_size][overlap_size] = triple[2]
 
 current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 print(current_time + ": Prepared data for 3d plot")
 
 triples = None
-communities = None
 
 # Create the 3D plot with Plotly
 fig = go.Figure()
 
-# print(counts)
-
 if True:
     # Define the range for the subset
-    x_range = max_overlap + 1  # Adjust as needed
-    y_range = max_community_size + 1 # Adjust as needed
+    x_range = 100 # max_overlap  # Adjust as needed
+    y_range = 500 # max_community_size  # Adjust as needed
 
     # Create the x, y coordinates for the subset
-    xpos_subset, ypos_subset = np.meshgrid(np.arange(x_range), np.arange(y_range ))
+    xpos_subset, ypos_subset = np.meshgrid(np.arange(x_range), np.arange(y_range))
     xpos_subset = xpos_subset.flatten()
     ypos_subset = ypos_subset.flatten()
 
     # Select the counts for the subset and then flatten
     counts_subset = counts[:y_range, :x_range].flatten()
 
-    # print(counts_subset)
-
     # Filter out zero values from the subset
     non_zero_indices_subset = counts_subset != 0
     xpos_filtered = xpos_subset[non_zero_indices_subset]
     ypos_filtered = ypos_subset[non_zero_indices_subset]
     dz_filtered = counts_subset[non_zero_indices_subset]
-
-    # print(non_zero_indices_subset)
 
     vertices, faces = create_bar_mesh(xpos_filtered, ypos_filtered, np.zeros_like(dz_filtered),
                                       np.ones_like(xpos_filtered), np.ones_like(ypos_filtered), dz_filtered)
@@ -167,8 +138,8 @@ if True:
         j=[f[1] for f in faces],
         k=[f[2] for f in faces],
         opacity=1,
-        facecolor=colors#,  # Array of colors for each face
-        #hoverinfo='none'
+        facecolor=colors,#,  # Array of colors for each face
+        hoverinfo='none'
     ))
 
     # Add invisible Scatter3d trace for hover info
@@ -182,14 +153,6 @@ if True:
         text=hover_text,
         hoverinfo='text'
     ))
-
-    # Save the triples to a file (for generating a model based on the data)
-    triples_file_name = f"triples_{current_time}.txt"
-    with open(triples_file_name, 'w') as file:
-        for x, y, z in zip(xpos_filtered, ypos_filtered, dz_filtered):
-            file.write(f"{x}, {y}, {z}\n")
-
-    print(current_time + ": Saved triples to " + triples_file_name)
 
     fig.update_layout(
         scene=dict(

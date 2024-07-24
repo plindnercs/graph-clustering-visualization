@@ -1,4 +1,11 @@
-with open(r'ig_communities_output_120h.metis', 'r') as fp:
+# creates a list of all required community overlaps formatted as: community1_id, community2_id, overlap_size
+# usage: python3 ig_communities_output_120h.metis
+
+import sys
+
+file_input = sys.argv[1]
+
+with open(file_input, 'r') as fp:
     file = fp.readlines()
 
 # create 4-tupel for every community
@@ -30,17 +37,20 @@ for member in members.keys():
 print(len(pairs_to_compare))
 
 # write pairs to a file
-with open('pairs_to_compare', 'w') as file:
-    for pair in pairs_to_compare:
-        print(f"{pair[0]},{pair[1]}\n")
-        # file.write(f"{pair[0]},{pair[1]}\n")
+# with open('pairs_to_compare', 'w') as file:
+# for pair in pairs_to_compare:
+# print(f"{pair[0]},{pair[1]}")
+# file.write(f"{pair[0]},{pair[1]}\n")
 
 # compare pairs and create output
 compared_pairs = list()
 for pair in pairs_to_compare:
     overlap = len(set.intersection(communities[pair[0]][3], communities[pair[1]][3]))
-    if overlap > 0:
-        print(overlap)
+    # if overlap > 0:
+    # print(overlap)
     compared_pairs.append((pair, overlap))
 
-print(compared_pairs[0])
+# print(compared_pairs[0])
+
+for compared_pair in compared_pairs:
+    print(f"{compared_pair[0][0]},{compared_pair[0][1]},{compared_pair[1]}")
