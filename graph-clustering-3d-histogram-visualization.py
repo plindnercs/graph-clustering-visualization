@@ -198,7 +198,7 @@ if True:
             zaxis=dict(
                 title='Number of Overlaps',
                 type='log',
-                range=[np.log10(100), np.log10(np.max(dz_filtered) + 1)] # Adjust the log range
+                range=[np.log10(1), np.log10(np.max(dz_filtered) + 1)] # Adjust the log range
                 # range=[np.log10(1), np.log10(np.max(dz_filtered) + 1)] # shows all values on z-axis
             )
         ),
