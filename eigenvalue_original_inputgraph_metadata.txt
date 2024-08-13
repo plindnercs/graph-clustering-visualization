@@ -1,0 +1,4 @@
+mpiexec -n 120 kpm -i 500 -s 200 -d 50 -g ig_communities_input_backup.metis
+readtime: 1141.3385219573975
+runime: 485613.1611022949
+totaltime: 486754.4996242523

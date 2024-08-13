@@ -1,6 +1,7 @@
 # script to compare the original input graph and the output graph
 # we want to know if the nodes of the output graph are all a part of the input graph
 # additionally, we want to see how the nodes of the original graph are connected to the clustered output graph
+# usage: python3 graph-clustering-input-output-difference.py graph1.metis graph2.metis
 import sys
 
 original_input_graph = sys.argv[1]
