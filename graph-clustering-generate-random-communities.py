@@ -15,12 +15,12 @@ def create_communities(num_members, num_communities, max_members_per_community):
         communities.append(community)
 
     # Ensure some members appear in multiple communities
-    members_in_multiple_communities = random.sample(members, num_members // 2)
-    for member in members_in_multiple_communities:
-        chosen_communities = random.sample(communities, random.randint(2, 4))
-        for community in chosen_communities:
-            if member not in community:
-                community.append(member)
+    # members_in_multiple_communities = random.sample(members, num_members // 2)
+    # for member in members_in_multiple_communities:
+    #     chosen_communities = random.sample(communities, random.randint(2, 4))
+    #     for community in chosen_communities:
+    #         if member not in community:
+    #             community.append(member)
 
     return communities
 
