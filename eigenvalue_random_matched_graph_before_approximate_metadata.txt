@@ -1,0 +1,4 @@
+mpiexec -n 120 kpm -i 100 -s 200 -d 50 -g merge_subgraphs_graph_output_20240807_104440.metis
+readtime: 1101.3606100082397
+runime: 65118.231711149216
+totaltime: 66219.59232115746
